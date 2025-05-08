@@ -60,3 +60,68 @@ select * from language;
 select avg(f.rental_rate) as avg_rental_rate, l.name from film f
 join language l on f.language_id = l.language_id
 group by l.name;
+-- --------------------------------------
+## Joins
+## Ques 9-Display the title of the movie, customer s first name, and last name who rented it.
+use sakila;
+select * from film;
+select * from customer;
+select * from rental;
+select * from inventory; 
+
+SELECT 
+    f.title as Movie_title, 
+    c.first_name, 
+    c.last_name 
+FROM 
+    film f
+INNER JOIN inventory i ON f.film_id = i.film_id
+INNER JOIN rental r ON r.inventory_id = i.inventory_id
+INNER JOIN customer c ON c.customer_id = r.customer_id;
+
+##Ques 10: Retrieve the names of all actors who have appeared in the film "Gone with the Wind."
+select * from actor;
+select * from film;
+select * from film_actor;
+SELECT a.first_name, a.last_name, f.title FROM actor a
+inner join film_actor fa ON a.actor_id = fa.actor_id
+inner join film f ON fa.film_id = f.film_id
+WHERE f.title = 'Gone with the Wind';
+
+
+##Ques11:Retrieve the customer names along with the total amount they've spent on rentals.
+select * from payment;
+select c.first_name, c.last_name, sum(p.amount) as total_amount from customer c
+inner join rental r on c.customer_id = r.customer_id
+inner join payment p on r.rental_id = p.rental_id
+group by c.customer_id;
+
+##Ques 12: List the titles of movies rented by each customer in a particular city (e.g., 'London').
+select * from city;
+select * from address;
+select c.first_name, c.last_name, (f.title) as Movie_title, ci.city from film f
+inner join inventory i on f.film_id = i.film_id
+inner join rental r on i.inventory_id = r.inventory_id
+inner join customer c on r.customer_id = c.customer_id
+inner join address a on c.address_id = a.address_id
+inner join city ci on a.city_id = ci.city_id
+where ci.city = 'London'
+group by  c.first_name, c.last_name, f.title, ci.city;
+
+### Advanced Joins and GROUP BY:
+# Ques 13: Display the top 5 rented movies along with the number of times
+# they've been rented.
+select (f.title) as Movies, count(r.rental_id) as rented_count from film f
+join inventory i on f.film_id = i.film_id
+join rental r on i.inventory_id = r.inventory_id
+group by f.title
+order by rented_count desc
+limit 5 ;
+
+## Ques 14: Determine the customers who have rented movies from both stores
+# (store ID 1 and store ID 2)
+select count(distinct i.store_id) as store_count, c.first_name, c.last_name from customer c
+join rental r on c.customer_id = r.customer_id
+join inventory i on r.inventory_id = i.inventory_id
+group by c.first_name, c.last_name
+having store_count;
