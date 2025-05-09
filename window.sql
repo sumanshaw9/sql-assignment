@@ -17,18 +17,107 @@ join payment p on r.rental_id = p.rental_id
 order by f.film_id, f.title, p.payment_date;
 
 # 3. Determine the average rental duration for each film, considering films with similar lengths.
+select avg(rental_duration) as average_rent_dur, floor(length / 10) * 10 as length_group from film
+group by length_group order by length_group;
 
 # 4. Identify the top 3 films in each category based on their rental counts.
+select * from category;
+select c.name as Category, f.title as film_title, count(r.rental_id) as rental_count,
+dense_rank() over(partition by c.name order by count(r.rental_id) desc) as Rank_category from category c 
+join film_category fc on c.category_id = fc.category_id
+join film f on fc.film_id = f.film_id
+join inventory i on f.film_id = i.film_id
+join rental r on i.inventory_id = r.inventory_id
+group by c.name, f.title
+Having dense_rank() over(partition by c.name order by count(r.rental_id) desc) <= 3
+order by c.name, Rank_category;
+
+WITH ranked_films AS (
+    SELECT 
+        c.name AS category,
+        f.title AS film_title,
+        COUNT(r.rental_id) AS rental_count,
+        DENSE_RANK() OVER (
+            PARTITION BY c.name
+            ORDER BY COUNT(r.rental_id) DESC
+        ) AS rank_in_category
+    FROM category c
+    JOIN film_category fc ON c.category_id = fc.category_id
+    JOIN film f ON fc.film_id = f.film_id
+    JOIN inventory i ON f.film_id = i.film_id
+    JOIN rental r ON i.inventory_id = r.inventory_id
+    GROUP BY c.name, f.title
+)
+SELECT *
+FROM ranked_films
+WHERE rank_in_category <= 3
+ORDER BY category, rank_in_category;
 
 # 5. Calculate the difference in rental counts between each customer's total rentals and the average rentals
 # across all customers.
+select customer_id, customer_name, total_rentals, round(avg(total_rentals) over(), 2) as avg_rentals,
+total_rentals - round(avg(total_rentals) over(), 2) as rental_difference
+from
+(select c.customer_id, concat(c.first_name,' ', c.last_name) as customer_name,
+count(r.rental_id) as total_rentals from customer c
+inner join rental r on c.customer_id = r.customer_id
+group by c.customer_id, c.first_name, c.last_name ) as customer_rentals
+order by rental_difference desc;
 
 # 6. Find the monthly revenue trend for the entire rental store over time.
-
+SELECT DATE_FORMAT(p.payment_date, '%Y-%m') AS month, ROUND(SUM(p.amount), 2) AS total_revenue
+FROM payment p GROUP BY month ORDER BY month;
 # 7. Identify the customers whose total spending on rentals falls within the top 20% of all customers.
-
+WITH customer_spending AS (
+    SELECT customer_id, SUM(amount) AS total_spent
+    FROM payment
+    GROUP BY customer_id
+),
+ranked_customers AS (
+    SELECT customer_id, total_spent,
+           NTILE(5) OVER (ORDER BY total_spent DESC) AS spending_percentile
+    FROM customer_spending
+)
+SELECT *
+FROM ranked_customers
+WHERE spending_percentile = 1;
 # 8. Calculate the running total of rentals per category, ordered by rental count.
+WITH category_rentals AS (
+    SELECT 
+        c.name AS category,
+        COUNT(r.rental_id) AS rental_count
+    FROM category c
+    JOIN film_category fc ON c.category_id = fc.category_id
+    JOIN inventory i ON fc.film_id = i.film_id
+    JOIN rental r ON i.inventory_id = r.inventory_id
+    GROUP BY c.name
+)
+SELECT 
+    category,
+    rental_count,
+    SUM(rental_count) OVER (ORDER BY rental_count) AS running_total
+FROM category_rentals;
 
 # 9. Find the films that have been rented less than the average rental count for their respective categories.
+with film_rentals as (select c.name AS category, f.title AS film, COUNT(r.rental_id) AS rental_count FROM film f
+    JOIN film_category fc ON f.film_id = fc.film_id
+    JOIN category c ON fc.category_id = c.category_id
+    JOIN inventory i ON f.film_id = i.film_id
+    JOIN rental r ON i.inventory_id = r.inventory_id
+    GROUP BY c.name, f.title
+),
+category_avg AS (
+    SELECT category, AVG(rental_count) AS avg_rentals
+    FROM film_rentals
+    GROUP BY category
+)
+SELECT f.*
+FROM film_rentals f
+JOIN category_avg a ON f.category = a.category
+WHERE f.rental_count < a.avg_rentals;
 
 # 10. Identify the top 5 months with the highest revenue and display the revenue generated in each month.
+select date_format(payment_date, '%Y-%m') as month,
+round(sum(amount),2) as total_revenue from payment
+group by month
+order by total_revenue desc limit 5;
